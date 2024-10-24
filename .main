@@ -1,0 +1,93 @@
+import os
+from spleeter.separator import Separator
+import librosa
+import soundfile as sf
+import numpy as np
+
+class AudioSeparator:
+    def __init__(self, model_type='2stems'):
+        """
+        Initialize the separator with specified model type.
+        Available models: '2stems', '4stems', '5stems'
+        """
+        self.separator = Separator(model_type)
+        
+    def separate_audio(self, input_path, output_dir):
+        """
+        Separate the audio file into different stems.
+        
+        Parameters:
+        input_path (str): Path to input audio file
+        output_dir (str): Directory to save separated audio files
+        
+        Returns:
+        dict: Dictionary containing paths to separated audio files
+        """
+        # Create output directory if it doesn't exist
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Perform separation
+        self.separator.separate_to_file(
+            input_path,
+            output_dir
+        )
+        
+        return {
+            'vocals': os.path.join(output_dir, 'vocals.wav'),
+            'accompaniment': os.path.join(output_dir, 'accompaniment.wav')
+        }
+    
+    @staticmethod
+    def enhance_vocals(input_path, output_path, noise_reduction_strength=0.3):
+        """
+        Enhance the separated vocals by reducing noise.
+        
+        Parameters:
+        input_path (str): Path to input vocals file
+        output_path (str): Path to save enhanced vocals
+        noise_reduction_strength (float): Strength of noise reduction (0.0 to 1.0)
+        """
+        # Load the audio file
+        audio, sr = librosa.load(input_path)
+        
+        # Compute the spectrogram
+        D = librosa.stft(audio)
+        magnitude, phase = librosa.magphase(D)
+        
+        # Simple noise reduction using spectral gating
+        threshold = np.mean(magnitude) * noise_reduction_strength
+        magnitude = np.maximum(magnitude - threshold, 0)
+        
+        # Reconstruct the signal
+        D_enhanced = magnitude * phase
+        audio_enhanced = librosa.istft(D_enhanced)
+        
+        # Save the enhanced audio
+        sf.write(output_path, audio_enhanced, sr)
+
+def main():
+    # Example usage
+    separator = AudioSeparator(model_type='2stems')
+    
+    # Replace with your audio file path
+    input_file = "D:\Movie Dubbing\Extracted\Fast 480 Dirilis.Ertugrul.S01e01-1.mp3"
+    output_dir = "D:\Movie Dubbing\Audio layers"
+    
+    # Separate the audio
+    separated_files = separator.separate_audio(input_file, output_dir)
+    
+    # Enhance the vocals
+    enhanced_vocals_path = os.path.join(output_dir, 'enhanced_vocals.wav')
+    separator.enhance_vocals(
+        separated_files['vocals'],
+        enhanced_vocals_path,
+        noise_reduction_strength=0.3
+    )
+    
+    print("Separation completed!")
+    print(f"Vocals: {separated_files['vocals']}")
+    print(f"Accompaniment: {separated_files['accompaniment']}")
+    print(f"Enhanced vocals: {enhanced_vocals_path}")
+
+if __name__ == "__main__":
+    main()
