@@ -1,11 +1,216 @@
-# SpeakerSense
+# Audio Separator
 
-##Project Description
-SpeakerSense is a machine learning project designed for detection and identificatton. this project uses various machine learning algorithms, Such as deep learning to recognize and classify different speakers based on audio features extractedfrom vouce recordings.
+A powerful Python tool for separating audio tracks into individual components (vocals, accompaniment, etc.) and enhancing vocal tracks using advanced signal processing techniques. This project uses the Spleeter library for source separation and implements custom vocal enhancement using spectral gating and multi-band processing.
 
-##Features
--Speaker Identification: Detect and classify multiple speakers from a single audio file.
--Audio Preprocessing: Feature extraction from raw audio data.
--Modeling: Using deep learning for voice recognition and speaker detection.
+## Features
 
-##Setup Instructions
+Audio Separator provides a robust set of features for audio processing:
+
+- Separate audio tracks into multiple stems (vocals, accompaniment, drums, bass)
+- Support for multiple separation models (2-stem, 4-stem, 5-stem)
+- Advanced vocal enhancement using multi-band spectral gating
+- Configurable noise reduction parameters
+- Support for various audio formats (MP3, WAV, FLAC, OGG, M4A)
+- Comprehensive error handling and logging
+- Command-line interface for easy integration
+
+## Installation
+
+### Prerequisites
+
+- Python 3.7 or higher
+- pip package manager
+- FFmpeg (required for audio processing)
+
+### Installing FFmpeg
+
+#### Windows
+1. Download FFmpeg from [FFmpeg official website](https://ffmpeg.org/download.html)
+2. Add FFmpeg to your system PATH
+
+#### Linux
+```bash
+sudo apt-get update
+sudo apt-get install ffmpeg
+```
+
+#### macOS
+```bash
+brew install ffmpeg
+```
+
+### Installing Audio Separator
+
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/audio-separator.git
+cd audio-separator
+```
+
+2. Create a virtual environment (recommended):
+```bash
+python -m venv env
+source env/bin/activate  # On Windows: env\Scripts\activate
+```
+
+3. Install the required packages:
+```bash
+pip install spleeter librosa soundfile numpy
+```
+
+If you encounter issues installing Spleeter, try:
+```bash
+pip install git+https://github.com/deezer/spleeter
+```
+
+## Usage
+
+### Command Line Interface
+
+Basic usage:
+```bash
+python audio_separator.py --input "input.mp3" --output-dir "output" --model "2stems"
+```
+
+With vocal enhancement:
+```bash
+python audio_separator.py --input "input.mp3" --output-dir "output" --model "2stems" --enhance-vocals --noise-reduction 0.3
+```
+
+### Available Commands
+
+```
+--input          Input audio file path (required)
+--output-dir     Output directory path (required)
+--model          Model type for separation (2stems, 4stems, 5stems)
+--prefix         Optional prefix for output filenames
+--enhance-vocals Apply vocal enhancement
+--noise-reduction Noise reduction strength (0.0 to 1.0)
+```
+
+### Python API
+
+You can also use Audio Separator in your Python code:
+
+```python
+from audio_separator import AudioSeparator
+
+# Initialize the separator
+separator = AudioSeparator(model_type='2stems')
+
+# Separate audio
+separated_files = separator.separate_audio(
+    'input.mp3',
+    'output_directory',
+    'optional_prefix'
+)
+
+# Enhance vocals
+separator.enhance_vocals(
+    separated_files['vocals'],
+    'output_directory/enhanced_vocals.wav',
+    noise_reduction_strength=0.3
+)
+```
+
+## Technical Details
+
+### Supported Models
+
+- `2stems`: Separates into vocals and accompaniment
+- `4stems`: Separates into vocals, drums, bass, and other
+- `5stems`: Separates into vocals, drums, bass, piano, and other
+
+### Vocal Enhancement
+
+The vocal enhancement process uses:
+- Multi-band spectral gating
+- Frequency-dependent thresholding
+- Signal normalization
+- Minimal signal retention to prevent artifacts
+
+### Supported Audio Formats
+
+- MP3 (.mp3)
+- WAV (.wav)
+- FLAC (.flac)
+- OGG (.ogg)
+- M4A (.m4a)
+
+## Contributing
+
+Contributions are welcome! Please follow these steps:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+## Error Handling
+
+The tool includes comprehensive error handling for common issues:
+- Invalid input file formats
+- Missing input files
+- Network connectivity issues
+- Processing errors
+- Resource cleanup
+
+Error messages are logged with detailed information to help diagnose issues.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- [Spleeter](https://github.com/deezer/spleeter) by Deezer Research
+- [librosa](https://librosa.org/) for audio processing
+- All contributors and maintainers
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Spleeter Installation Fails**
+   ```bash
+   pip install git+https://github.com/deezer/spleeter
+   ```
+   or try using conda:
+   ```bash
+   conda install -c conda-forge spleeter
+   ```
+
+2. **FFmpeg Not Found**
+   - Ensure FFmpeg is installed and added to your system PATH
+   - Verify installation: `ffmpeg -version`
+
+3. **Memory Issues**
+   - Try processing smaller audio files
+   - Use the 2stems model which requires less memory
+   - Increase your system's swap space
+
+### Getting Help
+
+If you encounter any issues:
+1. Check the [Issues](https://github.com/yourusername/audio-separator/issues) page
+2. Search for similar problems in closed issues
+3. Open a new issue with:
+   - Your system information
+   - Complete error message
+   - Steps to reproduce the problem
+
+## Roadmap
+
+Future improvements planned:
+- GPU acceleration support
+- Additional enhancement algorithms
+- Batch processing capabilities
+- Web interface
+- Docker container support
+
+## Contact
+
+Your Name - [@yourtwitter](https://twitter.com/yourtwitter) - email@example.com
+
+Project Link: [https://github.com/yourusername/audio-separator](https://github.com/yourusername/audio-separator)
