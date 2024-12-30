@@ -250,34 +250,35 @@ def parse_arguments():
     return parser.parse_args()
 
 def main():
-    """Main function to run the audio separation tool"""
-    args = parse_arguments()
-    
+
+def main():
+    """Main function to demonstrate the audio separation process."""
     try:
-        # Initialize separator
-        separator = AudioSeparator(model_type=args.model)
+        # Initialize the separator
+        separator = AudioSeparator(model_type='2stems')
         
-        # Separate audio
-        separated_files = separator.separate_audio(
-            args.input,
-            args.output_dir,
-            args.prefix
+        # Define paths using pathlib for safe path handling
+        input_file = Path("D:/Movie Dubbing/Extracted/Fast 480 Dirilis.Ertugrul.S01e01-1.mp3")
+        output_dir = Path("D:/Movie Dubbing/Audio layers")
+        
+        # Verify the input file exists before processing
+        if not input_file.exists():
+            logger.error(f"Input file not found: {input_file}")
+            return
+        
+        # Perform separation
+        separated_files = separator.separate_audio(input_file, output_dir)
+        
+        # Enhance the vocals
+        enhanced_vocals_path = output_dir / 'enhanced_vocals.wav'
+        separator.enhance_vocals(
+            separated_files['vocals'],
+            enhanced_vocals_path,
+            noise_reduction_strength=0.3
         )
         
-        # Enhance vocals if requested
-        if args.enhance_vocals:
-            enhanced_vocals_path = os.path.join(
-                args.output_dir,
-                'enhanced_vocals.wav'
-            )
-            separator.enhance_vocals(
-                separated_files['vocals'],
-                enhanced_vocals_path,
-                noise_reduction_strength=args.noise_reduction
-            )
-            logger.info(f"Enhanced vocals saved to: {enhanced_vocals_path}")
-        
         logger.info("Processing completed successfully!")
+        logger.info(f"Enhanced vocals saved to: {enhanced_vocals_path}")
         
     except Exception as e:
         logger.error(f"Processing failed: {str(e)}")
