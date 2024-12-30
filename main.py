@@ -250,9 +250,7 @@ def parse_arguments():
     return parser.parse_args()
 
 def main():
-
-def main():
-    """Main function to demonstrate the audio separation process."""
+    
     try:
         # Initialize the separator
         separator = AudioSeparator(model_type='2stems')
