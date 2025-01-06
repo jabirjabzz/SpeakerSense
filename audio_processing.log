@@ -1,0 +1,7 @@
+2025-01-01 22:06:38,116 - INFO - main.py:187 - Starting audio processing pipeline
+2025-01-01 22:06:38,121 - INFO - main.py:38 - Initializing AudioSeparator with model: htdemucs on cpu
+2025-01-01 22:06:38,755 - INFO - main.py:52 - Model loaded in 0.63 seconds
+2025-01-01 22:06:38,755 - INFO - main.py:57 - AudioSeparator initialized in 0.63 seconds
+2025-01-01 22:06:38,762 - INFO - main.py:192 - Separator initialized in 0.64 seconds
+2025-01-01 22:06:38,762 - INFO - main.py:78 - Starting separation of Fast 480 Dirilis.Ertugrul.S01e01-1.mp3
+2025-01-01 22:06:48,264 - INFO - main.py:89 - Audio loaded in 9.50 seconds
