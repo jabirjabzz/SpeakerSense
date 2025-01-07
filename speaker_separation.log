@@ -1,0 +1,4 @@
+2025-01-07 22:36:45,848 - ERROR - Model initialization failed: module 'torchaudio.pipelines' has no attribute 'CONVTASNET_SEPARATION_BASE'
+2025-01-07 22:36:45,848 - ERROR - Processing failed: Failed to initialize Conv-TasNet model: module 'torchaudio.pipelines' has no attribute 'CONVTASNET_SEPARATION_BASE'
+2025-01-07 22:43:25,090 - ERROR - Model initialization failed: [Errno 2] No such file or directory: 'pyannote/pyannote-audio\\hubconf.py'
+2025-01-07 22:43:25,090 - ERROR - Processing failed: Failed to initialize Sourceformer model: [Errno 2] No such file or directory: 'pyannote/pyannote-audio\\hubconf.py'
