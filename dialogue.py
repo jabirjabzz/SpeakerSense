@@ -261,3 +261,16 @@ def main():
     finally:
         if separator and separator.device == 'cuda':
             torch.cuda.empty_cache()
+
+
+if __name__ == "__main__":
+    # Example usage
+    model_name = "pyannote/speech-separation-ami-1.0"
+    token = "huggingface_auth"  # Replace with your actual token
+    audio_file = "path_to_your_audio_file.wav"
+    output_dir = "output_directory"
+
+    pipeline = SpeakerSeparationPipeline(model_name, token)
+    diarization, sources = pipeline.process_audio_file(audio_file)
+    pipeline.save_outputs(diarization, sources, output_dir)
+
