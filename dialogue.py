@@ -10,7 +10,6 @@ from dataclasses import dataclass
 import argparse
 from pyannote.audio import Pipeline
 from pyannote.core import SlidingWindowFeature
-import scipy.io.wavfile
 
 # Configure logging
 logging.basicConfig(
@@ -57,58 +56,46 @@ class ProcessingProgress:
             progress_str += f" | Error: {self.error_message}"
         return progress_str
 
-
 class LongAudioSpeakerSeparation:
     def __init__(self, model_name: str, token: str, device: str = 'cuda',
-                 sample_rate: int = 16000, progress_callback: Optional[Callable] = None):
-        # ... (other initialization code)
-
+                 sample_rate: int = 16000, chunk_duration: float = 30.0,
+                 overlap_duration: float = 5.0, progress_callback: Optional[Callable] = None):
+        """
+        Initialize the speaker separation system.
+        
+        Args:
+            model_name: Name of the pretrained model
+            token: HuggingFace access token
+            device: Device to run the model on ('cuda' or 'cpu')
+            sample_rate: Audio sample rate
+            chunk_duration: Duration of each processing chunk in seconds
+            overlap_duration: Duration of overlap between chunks in seconds
+            progress_callback: Optional callback function for progress updates
+        """
+        self.model_name = model_name
+        self.token = token
+        self.device = torch.device(device)
+        self.sample_rate = sample_rate
+        self.progress_callback = progress_callback
+        self.progress = ProcessingProgress()
+        
+        logger.info(f"Initializing with device: {device}")
+        
         try:
+            # Initialize the pipeline
             self.pipeline = Pipeline.from_pretrained(model_name, use_auth_token=token)
             self.pipeline.to(self.device)
             logger.info(f"Model loaded on {self.device}")
-
-            if self.device.type == 'cuda':
-                try:
-                    max_mem_bytes = torch.cuda.get_device_properties(self.device).total_memory
-                    available_memory_factor = 0.7
-                    max_mem_available = int(max_mem_bytes * available_memory_factor)
-
-                    # KEY CHANGE: Get an example input shape
-                    example_input = torch.randn(1, self.sample_rate).to(self.device) # 1 second of audio
-                    with torch.no_grad():
-                        _ = self.pipeline({"waveform": example_input, "sample_rate": self.sample_rate}) # Run a dummy forward pass
-
-                    # Get input shape from the model's first layer
-                    input_shape = self.pipeline.model.modules.model.in_channels * self.sample_rate # changed this line
-                    model_memory_footprint = input_shape * 4
-
-                    self.max_chunk_size = int(max_mem_available / model_memory_footprint)
-
-                    if self.max_chunk_size < self.sample_rate:
-                        self.max_chunk_size = self.sample_rate
-
-                    self.chunk_duration = self.max_chunk_size / self.sample_rate
-                    logger.info(f"Calculated chunk duration: {self.chunk_duration:.2f} seconds based on available memory.")
-
-                except RuntimeError as e:
-                    logger.error(f"Error getting CUDA memory info: {e}. Falling back to default chunk size.")
-                    self.chunk_duration = 30.0
-                    self.max_chunk_size = int(self.chunk_duration * self.sample_rate)
-                except Exception as e:
-                    logger.error(f"Error during chunk size calculation: {e}. Falling back to default chunk size.")
-                    self.chunk_duration = 30.0
-                    self.max_chunk_size = int(self.chunk_duration * self.sample_rate)
-            else:
-                self.chunk_duration = 30.0
-                self.max_chunk_size = int(self.chunk_duration * self.sample_rate)
-
-            self.overlap_duration = 5.0
+            
+            # Set chunk parameters
+            self.chunk_duration = chunk_duration
+            self.overlap_duration = overlap_duration
             self.chunk_size = int(self.chunk_duration * self.sample_rate)
             self.overlap_size = int(self.overlap_duration * self.sample_rate)
             self.hop_size = self.chunk_size - self.overlap_size
+            
             logger.info(f"Initializing with chunk duration: {self.chunk_duration}s, overlap: {self.overlap_duration}s")
-
+            
         except Exception as e:
             logger.error(f"Model loading failed: {e}")
             raise RuntimeError(f"Model loading failed: {e}")
@@ -131,24 +118,24 @@ class LongAudioSpeakerSeparation:
             with torch.inference_mode():
                 # Ensure chunk has correct shape (channel, time)
                 if chunk.dim() == 1:
-                    chunk = chunk.unsqueeze(0)  # Add channel dimension
+                    chunk = chunk.unsqueeze(0)
                 elif chunk.dim() == 3:
-                    chunk = chunk.squeeze(0)  # Remove batch dimension if present
+                    chunk = chunk.squeeze(0)
                 
                 # Verify shape is correct
                 if not (chunk.dim() == 2 and chunk.size(0) == 1):
                     raise ValueError(f"Unexpected chunk shape: {chunk.shape}. Expected shape: (1, time)")
                 
                 logger.debug(f"Processing chunk with shape: {chunk.shape}")
-                diarization, sources = self.pipeline({
+                diarization = self.pipeline({
                     "waveform": chunk,
                     "sample_rate": self.sample_rate
                 })
                 
                 # Extract speaker embeddings for consistency
-                embeddings = self._extract_speaker_embeddings(sources)
+                embeddings = self._extract_speaker_embeddings(chunk)
                 
-                return sources, {
+                return chunk, {
                     "diarization": diarization,
                     "speaker_embeddings": embeddings
                 }
@@ -156,33 +143,24 @@ class LongAudioSpeakerSeparation:
             logger.error(f"Error processing chunk: {str(e)}")
             raise
 
-    def _extract_speaker_embeddings(self, sources: torch.Tensor) -> torch.Tensor:
-        """Extract speaker embeddings for speaker consistency"""
-        # Use .data to access the tensor from SlidingWindowFeature
-        if isinstance(sources, SlidingWindowFeature):
-            sources_tensor = sources.data
-        else:
-            sources_tensor = sources
-
-        # Convert numpy array to torch tensor if necessary
-        if isinstance(sources_tensor, np.ndarray):
-            sources_tensor = torch.from_numpy(sources_tensor)
-
-        # Ensure tensor is on the correct device
-        sources_tensor = sources_tensor.to(self.device)
-
-        # Simple embedding extraction - mean of each source along time dimension
-        return torch.mean(sources_tensor, dim=1)
-
+    def _extract_speaker_embeddings(self, waveform: torch.Tensor) -> torch.Tensor:
+        """Extract speaker embeddings from audio waveform"""
+        with torch.no_grad():
+            embeddings = self.pipeline.embedding(waveform)
+            return embeddings
 
     def _align_speakers_across_chunks(self, current_embeddings: torch.Tensor,
                                     previous_embeddings: torch.Tensor) -> List[int]:
         """Align speakers between chunks based on embedding similarity"""
+        from scipy.optimize import linear_sum_assignment
+        
         similarity_matrix = torch.nn.functional.cosine_similarity(
             current_embeddings.unsqueeze(1),
             previous_embeddings.unsqueeze(0)
-        )
-        return torch.argmax(similarity_matrix, dim=1).tolist()
+        ).cpu().numpy()
+        
+        row_ind, col_ind = linear_sum_assignment(-similarity_matrix)
+        return col_ind.tolist()
 
     def process_long_audio(self, audio_path: str, output_dir: str):
         """Process a long audio file by chunking with overlap"""
@@ -212,7 +190,6 @@ class LongAudioSpeakerSeparation:
             # Initialize storage
             processed_sources = []
             previous_embeddings = None
-            speaker_mapping = None
             
             self.progress.total_chunks = num_chunks
             
@@ -224,7 +201,7 @@ class LongAudioSpeakerSeparation:
                     # Extract chunk
                     start = i * self.hop_size
                     end = min(start + self.chunk_size, total_samples)
-                    chunk = waveform[:, start:end]
+                    chunk = waveform[:, start:end].to(self.device)
                     
                     # Pad if necessary
                     if chunk.size(-1) < self.chunk_size:
@@ -233,10 +210,9 @@ class LongAudioSpeakerSeparation:
                         )
                     
                     # Process chunk
-                    chunk = chunk.to(self.device)
                     sources, metadata = self._process_single_chunk(chunk)
                     
-                    # Align speakers with previous chunk
+                    # Align speakers if not first chunk
                     if previous_embeddings is not None:
                         speaker_mapping = self._align_speakers_across_chunks(
                             metadata["speaker_embeddings"],
@@ -263,14 +239,17 @@ class LongAudioSpeakerSeparation:
                     pbar.update(1)
                     
                     # Memory management
-                    if self.device == 'cuda':
+                    if self.device.type == 'cuda':
                         torch.cuda.empty_cache()
             
             # Save results
             self.progress.update(stage="Saving results", status="saving")
             os.makedirs(output_dir, exist_ok=True)
+            
+            # Concatenate all processed chunks
             final_sources = torch.cat(processed_sources, dim=-1)
             
+            # Save each speaker's audio
             for spk_idx in range(final_sources.size(0)):
                 output_path = os.path.join(output_dir, f"speaker_{spk_idx+1}.wav")
                 torchaudio.save(
@@ -289,13 +268,11 @@ class LongAudioSpeakerSeparation:
             logger.error("Processing failed", exc_info=True)
             if self.progress_callback:
                 self.progress_callback(self.progress)
-            raise RuntimeError(f"Processing failed: {str(e)}") from e
-
+            raise RuntimeError(f"Processing failed: {str(e)}")
 
 def progress_handler(progress: ProcessingProgress):
     """Example progress callback function"""
     print(f"\rProgress: {progress}", end='')
-
 
 def main():
     parser = argparse.ArgumentParser(description="Long Audio Speaker Separation")
@@ -336,7 +313,6 @@ def main():
     finally:
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-
 
 if __name__ == "__main__":
     main()
