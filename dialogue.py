@@ -115,86 +115,53 @@ class LongAudioSpeakerSeparation:
             logger.error(f"Model loading failed: {str(e)}")
             raise RuntimeError(f"Model loading failed: {str(e)}")
 
-    def _apply_crossfade(self, chunk1: torch.Tensor, chunk2: torch.Tensor,
-                        overlap_size: int) -> torch.Tensor:
+    def _apply_crossfade(self, chunk1: torch.Tensor, chunk2: torch.Tensor, overlap_size: int) -> torch.Tensor:
         """
-        Apply linear crossfade between two chunks
-        
-        Args:
-            chunk1: First audio chunk
-            chunk2: Second audio chunk
-            overlap_size: Size of overlap region
-            
-        Returns:
-            torch.Tensor: Crossfaded audio
-            
-        Raises:
-            RuntimeError: If crossfade operation fails
-            ValueError: If chunk shapes are incompatible
+        Apply linear crossfade between two chunks.
         """
         if chunk1.shape[:-1] != chunk2.shape[:-1]:
             raise ValueError(f"Incompatible chunk shapes: {chunk1.shape} and {chunk2.shape}")
             
         fade_in = torch.linspace(0, 1, overlap_size, device=chunk1.device)
         fade_out = torch.linspace(1, 0, overlap_size, device=chunk1.device)
-        
-        # Add dimensions to match audio shape
+
         for _ in range(chunk1.dim() - 1):
             fade_in = fade_in.unsqueeze(0)
             fade_out = fade_out.unsqueeze(0)
-        
-        # Extract overlapping regions
+
         overlap1 = chunk1[..., -overlap_size:]
         overlap2 = chunk2[..., :overlap_size]
-        
-        logger.debug(f"Crossfading chunks of shapes {chunk1.shape}, {chunk2.shape}")
-        
-        try:
-            # Apply crossfade
-            crossfaded = overlap1 * fade_out + overlap2 * fade_in
-            result = torch.cat([chunk1[..., :-overlap_size], crossfaded, chunk2[..., overlap_size:]], dim=-1)
-            return result
-        except RuntimeError as e:
-            logger.error(f"Crossfade failed: {str(e)}")
-            raise
+
+        logger.debug(f"Crossfading chunks: overlap1 shape {overlap1.shape}, overlap2 shape {overlap2.shape}")
+
+        crossfaded = overlap1 * fade_out + overlap2 * fade_in
+        result = torch.cat([chunk1[..., :-overlap_size], crossfaded, chunk2[..., overlap_size:]], dim=-1)
+        logger.debug(f"Resulting crossfaded chunk shape: {result.shape}")
+        return result
 
     def _process_single_chunk(self, chunk: torch.Tensor) -> Tuple[torch.Tensor, Dict]:
         """
-        Process a single chunk and return separated sources and metadata
-        
-        Args:
-            chunk: Audio chunk to process
-            
-        Returns:
-            Tuple[torch.Tensor, Dict]: Processed audio and metadata
-            
-        Raises:
-            ValueError: If chunk has invalid shape
-            RuntimeError: If processing fails
+        Process a single chunk and return separated sources and metadata.
         """
+        logger.debug(f"Processing single chunk with shape: {chunk.shape}")
+
         try:
             with torch.inference_mode():
-                # Ensure chunk has correct shape (channel, time)
                 if chunk.dim() == 1:
                     chunk = chunk.unsqueeze(0)
                 elif chunk.dim() > 2:
                     chunk = chunk.squeeze()
-                
+
                 if chunk.dim() != 2 or chunk.size(0) != 1:
                     raise ValueError(f"Invalid chunk shape: {chunk.shape}. Expected shape: (1, time)")
-                
-                logger.debug(f"Processing chunk with shape: {chunk.shape}")
-                diarization = self.pipeline({
-                    "waveform": chunk,
-                    "sample_rate": self.sample_rate
-                })
-                
+
+                diarization = self.pipeline({"waveform": chunk, "sample_rate": self.sample_rate})
+                logger.debug(f"Diarization result: {diarization}")
+
                 embeddings = self._extract_speaker_embeddings(chunk)
-                
-                return chunk, {
-                    "diarization": diarization,
-                    "speaker_embeddings": embeddings
-                }
+                logger.debug(f"Extracted embeddings shape: {embeddings.shape}")
+
+                return chunk, {"diarization": diarization, "speaker_embeddings": embeddings}
         except Exception as e:
             logger.error(f"Chunk processing failed: {str(e)}")
             raise RuntimeError(f"Chunk processing failed: {str(e)}")
